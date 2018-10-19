@@ -6,6 +6,7 @@ import java.net.SocketException;
 import java.util.Scanner;
 
 public class Client {
+	private final static int MAX_BUFFER_SIZE = 1024;
 
 	private Socket socket;
 	private DataInputStream in;
@@ -23,33 +24,43 @@ public class Client {
 		try {
 			while (true) {
 				//handle data sent from server and print to console
-				System.out.println("i am here");
-				System.out.println(in.readUTF());//temp, replace by process pckt
+				byte[] starter = readBytes(in);
+				System.out.println(new String(starter));
 
-				System.out.println("Write a command to continue (\"bye\" to exit)");
-				String command = scanner.nextLine();
-				byte[] datatoSend;
+				String command = "";
+				while (command.trim().isEmpty()) {
+					command = scanner.nextLine();
+				}
+				byte[] dataToSend;
 
 				//process command
 				if ("bye".equals(command)) {
-					out.write(command.getBytes());//send exit command to server, so he can abort too
-					datatoSend = null;
+					byte[] exitCommand = command.getBytes();
+					writeBytes(exitCommand);//send exit command to server, so he can abort too
+					socket.close();
+					System.out.println("Exit command, closing client");
+					dataToSend = null;
 				} else {
-					datatoSend = command.getBytes();
+					dataToSend = command.getBytes();
 				}
 
 				//send data if any, else exit
-				if (datatoSend == null) {
-					socket.close();
+				if (dataToSend == null) {
 					break;
 				} else {
-					out.write(datatoSend);
+					writeBytes(dataToSend);
 				}
+
+				//read server response
+				byte[] response = readBytes(in);
+				System.out.println(new String(response));
 			}
-			close();
 		} catch (
 				SocketException s) {
+			socket.close();
 			System.out.println("Something went wrong in the server, exiting client");
+		} finally {
+			close();
 		}
 	}
 
@@ -57,5 +68,17 @@ public class Client {
 		in.close();
 		out.close();
 		scanner.close();
+	}
+
+	private byte[] readBytes(InputStream in) throws IOException {
+		byte[] data = new byte[MAX_BUFFER_SIZE];
+
+		in.read(data, 0, data.length);
+
+		return data;
+	}
+
+	private void writeBytes(byte[] data) throws IOException {
+		out.write(data, 0, data.length);
 	}
 }
