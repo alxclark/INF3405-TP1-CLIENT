@@ -1,6 +1,8 @@
 package com.log3405.client;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.Socket;
 import java.util.Scanner;
 
 public class ApplicationStartup {
@@ -8,38 +10,15 @@ public class ApplicationStartup {
 	public static void main(String[] args) {
 		Scanner consoleInputReader = new Scanner(System.in);
 
-		String ipAddress = getIPAddress(consoleInputReader);
-		int port = getPort(consoleInputReader);
-
 		try {
-			Client client = new Client(ipAddress, port);
-			run(client);
-		} catch (IOException e){
+			InetAddress ipAddress = InetAddress.getByName(getIPAddress(consoleInputReader));
+			int port = getPort(consoleInputReader);
+			Socket socket = new Socket(ipAddress, port);
+
+			new Client(socket, consoleInputReader).run();
+		} catch (IOException e) {
 			e.printStackTrace();
 		}
-
-	}
-
-	private static void run(Client client) throws IOException{
-			boolean done = false;
-			Scanner inputs = new Scanner(System.in);
-
-			while(!done){
-				System.out.println("Enter command: ");
-				String command = inputs.nextLine();
-
-				switch (command){
-					case "FUCK YOU!":{
-						client.close();
-						done = true;
-						break;
-					}
-					default:{
-						//client.sendMessage(command);
-						break;
-					}
-				}
-			}
 	}
 
 	private static String getIPAddress(Scanner consoleInputReader) {

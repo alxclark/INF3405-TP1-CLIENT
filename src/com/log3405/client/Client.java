@@ -1,63 +1,61 @@
 package com.log3405.client;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
-import java.util.Iterator;
+import java.io.*;
+import java.net.Socket;
+import java.net.SocketException;
 import java.util.Scanner;
 
 public class Client {
-	private Selector selector;
-	private SocketChannel socket;
-	private ByteBuffer buffer;
 
-	public Client(String ipAddress, int port) throws IOException {
-		selector = Selector.open();
-		socket = SocketChannel.open(new InetSocketAddress(ipAddress, port));
-		socket.configureBlocking(false);
-		buffer = ByteBuffer.allocate(1024);
-		socket.register(selector, SelectionKey.OP_CONNECT);
+	private Socket socket;
+	private DataInputStream in;
+	private DataOutputStream out;
+	private Scanner scanner;
+
+	public Client(Socket socket, Scanner scanner) throws IOException {
+		this.socket = socket;
+		this.in = new DataInputStream(socket.getInputStream());
+		this.out = new DataOutputStream(socket.getOutputStream());
+		this.scanner = scanner;
 	}
 
-	public void run() throws IOException{
-		while (true) {
-			int readyChannels = selector.select();
-			if(readyChannels == 0) continue;
+	public void run() throws IOException {
+		try {
+			while (true) {
+				//handle data sent from server and print to console
+				System.out.println("i am here");
+				System.out.println(in.readUTF());//temp, replace by process pckt
 
-			Iterator keys = selector.selectedKeys().iterator();
-			while (keys.hasNext()) {
-				SelectionKey key = (SelectionKey) keys.next();
-				keys.remove();//prevent a key from being handled twice
+				System.out.println("Write a command to continue (\"bye\" to exit)");
+				String command = scanner.nextLine();
+				byte[] datatoSend;
 
-				if (!key.isValid()) {
-					continue;
+				//process command
+				if ("bye".equals(command)) {
+					out.write(command.getBytes());//send exit command to server, so he can abort too
+					datatoSend = null;
+				} else {
+					datatoSend = command.getBytes();
 				}
-				if (key.isConnectable()) {
-					finishConnect(key);
+
+				//send data if any, else exit
+				if (datatoSend == null) {
+					socket.close();
+					break;
+				} else {
+					out.write(datatoSend);
 				}
 			}
+			close();
+		} catch (
+				SocketException s) {
+			System.out.println("Something went wrong in the server, exiting client");
 		}
 	}
 
-	private void finishConnect(SelectionKey key) throws IOException{
-		SocketChannel socketChannel = (SocketChannel) key.channel();
-		try {
-			socketChannel.finishConnect();
-		}catch (IOException e){
-			e.printStackTrace();
-			key.cancel();
-			return;
-		}
-		socketChannel.register(selector, SelectionKey.OP_WRITE);
-	}
-
-	public void sendMessage(String command) throws IOException {
-		buffer = ByteBuffer.wrap(command.getBytes());
-
-	}
-
-	public void close() throws IOException {
-		socket.close();
+	private void close() throws IOException {
+		in.close();
+		out.close();
+		scanner.close();
 	}
 }
