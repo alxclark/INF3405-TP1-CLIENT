@@ -3,7 +3,6 @@ package com.log3405.client;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.Scanner;
 
@@ -20,15 +19,15 @@ public class Client {
 		this.in = new DataInputStream(socket.getInputStream());
 		this.out = new DataOutputStream(socket.getOutputStream());
 		this.scanner = scanner;
+
+		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+		System.out.println(BytesUtils.bytesToString(starter));
 	}
 
 	public void run() throws IOException {
 		try {
+			exec:
 			while (true) {
-				//handle data sent from server and print to console
-				byte[] starter = readBytes(in, MAX_BUFFER_SIZE);
-				System.out.println(new String(starter).trim());
-
 				String userInput = "";
 				while (userInput.trim().isEmpty()) {
 					userInput = scanner.nextLine();
@@ -41,61 +40,84 @@ public class Client {
 					inputPayload = action[1];
 				}
 
-				if ("cd".equals(inputType)) {
-					byte[] packetType = intToBytes(0);
-					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType, packetPayload);
+				switch (inputType) {
+					case "cd": {
+						byte[] finalPacket = processBasePacket(PacketTypeCode.CD.ordinal(), inputPayload);
+						BytesUtils.writeBytes(out, finalPacket);
+						logResponse();
+						break;
+					}
+					case "ls": {
+						byte[] finalPacket = processBasePacket(PacketTypeCode.LS.ordinal(), inputPayload);
+						BytesUtils.writeBytes(out, finalPacket);
+						logResponse();
+						break;
+					}
+					case "mkdir": {
+						byte[] finalPacket = processBasePacket(PacketTypeCode.MKDIR.ordinal(), inputPayload);
+						BytesUtils.writeBytes(out, finalPacket);
+						logResponse();
+						break;
+					}
+					case "upload": {
+						byte[] packetType = BytesUtils.intToBytes(PacketTypeCode.UPLOAD.ordinal());
+						File fileToUpload = new File(inputPayload);
+						byte[] filePayload = Files.readAllBytes(fileToUpload.toPath());
+						byte[] fileLengthPayload = BytesUtils.intToBytes(filePayload.length);
+						byte[] fileNamePayload = fileToUpload.getName().getBytes();
+						byte[] tempPacket = BytesUtils.concat(packetType, fileLengthPayload);
+						byte[] finalPacket = BytesUtils.concat(tempPacket, fileNamePayload);
 
-					writeBytes(finalPacket);
-				} else if ("ls".equals(inputType)) {
-					byte[] packetType = intToBytes(1);
-					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType, packetPayload);
+						BytesUtils.writeBytes(out, finalPacket);
+						System.out.println("Server: " + BytesUtils
+								.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE)));//read until server is ready to handle the file
+						BytesUtils.writeBytes(out, filePayload);
+						logResponse();
+						break;
+					}
+					case "download": {
+						byte[] requestPacket = processBasePacket(PacketTypeCode.DOWNLOAD.ordinal(), inputPayload);
+						BytesUtils.writeBytes(out, requestPacket);
 
-					writeBytes(finalPacket);
-				} else if ("mkdir".equals(inputType)) {
-					byte[] packetType = intToBytes(2);
-					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType, packetPayload);
+						byte[] response = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+						int fileStatus = BytesUtils.bytesToInt(BytesUtils.extractSubByteArray(response, 0, 4));
+						if (fileStatus == 0) {
+							int downloadSize = BytesUtils.bytesToInt(BytesUtils.extractSubByteArray(response, 4, 8));
+							String fileName = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length - 1));
+							String messageMidUpload = "Ready to read:" + downloadSize + " bytes";
+							BytesUtils.writeBytes(out, messageMidUpload.getBytes());
 
-					writeBytes(finalPacket);
-				} else if ("upload".equals(inputType)) {
-					byte[] packetType = intToBytes(3);
-					File fileToUpload = new File(inputPayload);
-					byte[] filePayload = Files.readAllBytes(fileToUpload.toPath());
-					byte[] fileLengthPayload = intToBytes(filePayload.length);
-					byte[] fileNamePayload = fileToUpload.getName().getBytes();
-					byte[] tempPacket = concat(packetType, fileLengthPayload);
-					byte[] finalPacket = concat(tempPacket, fileNamePayload);
+							byte[] file = BytesUtils.readBytes(in, downloadSize);
+							File newFile = new File(fileName);
 
-					writeBytes(finalPacket);
-					readBytes(in, MAX_BUFFER_SIZE);//read until server is ready to handle the file
-					writeBytes(filePayload);
-				} else if ("download".equals(inputType)) {
-					byte[] packetType = intToBytes(4);
-					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType, packetPayload);
-
-					writeBytes(finalPacket);
-					// TODO: DOWNLOAD THE FILE
-				} else if ("exit".equals(inputType)) {
-					byte[] packetType = intToBytes(5);
-					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType, packetPayload);
-
-					writeBytes(finalPacket);
-
-					// Wait for response from server before closing
-					byte[] starterExit = readBytes(in, MAX_BUFFER_SIZE);
-					System.out.println(new String(starterExit).trim());
-					break;
-				} else {
-					// UNKNOWN COMMAND
-					writeBytes("Unknown command".getBytes());
+							try (FileOutputStream fos = new FileOutputStream(newFile.getPath())) {
+								if (!newFile.exists()) {
+									newFile.createNewFile();
+								}
+								fos.write(file);
+								System.out.println("Fichier téléchargé avec sucess. Path: " + newFile.getCanonicalPath());
+							} catch (IOException e) {
+								System.out.println("Une erreur est arrivee lors du telechargement du fichier");
+							}
+						} else {
+							String errorMsg = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length - 1));
+							System.out.println(errorMsg);
+						}
+						break;
+					}
+					case "exit": {
+						byte[] finalPacket = processBasePacket(PacketTypeCode.EXIT.ordinal(), inputPayload);
+						BytesUtils.writeBytes(out, finalPacket);
+						logResponse();
+						break exec;
+					}
+					default: {
+						// UNKNOWN COMMAND
+						BytesUtils.writeBytes(out, "Unknown command".getBytes());
+					}
 				}
 			}
-		} catch (
-				SocketException s) {
+		} catch (SocketException s) {
 			socket.close();
 			System.out.println("Something went wrong in the server, exiting client");
 		} finally {
@@ -103,35 +125,21 @@ public class Client {
 		}
 	}
 
+	private byte[] processBasePacket(int typeCode, String inputPayload) {
+		byte[] packetType = BytesUtils.intToBytes(typeCode);
+		byte[] packetPayload = inputPayload.getBytes();
+		return BytesUtils.concat(packetType, packetPayload);
+	}
+
+	private void logResponse() throws IOException {
+		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+		System.out.println(BytesUtils.bytesToString(starter));
+	}
+
 	private void close() throws IOException {
 		socket.close();
 		in.close();
 		out.close();
 		scanner.close();
-	}
-
-	private byte[] readBytes(InputStream in, int bufferSize) throws IOException {
-		byte[] data = new byte[bufferSize];
-
-		in.read(data, 0, data.length);
-
-		return data;
-	}
-
-	private void writeBytes(byte[] data) throws IOException {
-		out.write(data, 0, data.length);
-	}
-
-	public byte[] intToBytes(final int i) {
-		ByteBuffer bb = ByteBuffer.allocate(4);
-		bb.putInt(i);
-		return bb.array();
-	}
-
-	public byte[] concat(byte[] a, byte[] b) {
-		byte[] c = new byte[a.length + b.length];
-		System.arraycopy(a, 0, c, 0, a.length);
-		System.arraycopy(b, 0, c, a.length, b.length);
-		return c;
 	}
 }
