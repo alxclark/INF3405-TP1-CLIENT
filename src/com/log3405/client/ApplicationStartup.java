@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ApplicationStartup {
 
@@ -12,7 +14,9 @@ public class ApplicationStartup {
 
 		try {
 			InetAddress ipAddress = InetAddress.getByName(getIPAddress(consoleInputReader));
+			System.out.println("IPAddress is: " + ipAddress);
 			int port = getPort(consoleInputReader);
+			System.out.println("Port is: " + port);
 			Socket socket = new Socket(ipAddress, port);
 
 			new Client(socket, consoleInputReader).run();
@@ -23,15 +27,25 @@ public class ApplicationStartup {
 
 	private static String getIPAddress(Scanner consoleInputReader) {
 		System.out.println("Hello, Please Enter the IPAddress of the server");
+		String ipAddressPattern = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+		Pattern pattern = Pattern.compile(ipAddressPattern);
 		String ipAddress = consoleInputReader.nextLine();
-		System.out.println("IPAddress is: " + ipAddress);
+		Matcher matcher = pattern.matcher(ipAddress);
+		if (!matcher.matches())
+		{
+			System.out.println("Invalid IPAddress. Valid example: 192.168.1.1");
+			ipAddress = getIPAddress(consoleInputReader);
+		}
 		return ipAddress;
 	}
 
 	private static int getPort(Scanner consoleInputReader) {
 		System.out.println("Please Enter the Port of the server");
 		int port = consoleInputReader.nextInt();
-		System.out.println("Port is: " + port);
+		if(port != 5000 && port != 5050){
+			System.out.println("Invalid port. Only 5000 and 5050 are supported");
+			port = getPort(consoleInputReader);
+		}
 		return port;
 	}
 }

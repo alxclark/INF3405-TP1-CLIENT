@@ -113,7 +113,7 @@ public class Client {
 					}
 					default: {
 						// UNKNOWN COMMAND
-						BytesUtils.writeBytes(out, "Unknown command".getBytes());
+						System.out.println("Unknown command. Possible commands are : ls, cd, mkdir, upload, download, exit");
 					}
 				}
 			}
