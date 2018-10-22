@@ -4,9 +4,8 @@ import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
+import java.nio.file.Files;
 import java.util.Scanner;
-import java.util.stream.Stream;
 
 public class Client {
 	private final static int MAX_BUFFER_SIZE = 1024;
@@ -27,7 +26,7 @@ public class Client {
 		try {
 			while (true) {
 				//handle data sent from server and print to console
-				byte[] starter = readBytes(in);
+				byte[] starter = readBytes(in, MAX_BUFFER_SIZE);
 				System.out.println(new String(starter).trim());
 
 				String userInput = "";
@@ -38,56 +37,56 @@ public class Client {
 				String action[] = userInput.split(" ", 2);
 				String inputPayload = "";
 				String inputType = action[0];
-				if(action.length > 1) {
+				if (action.length > 1) {
 					inputPayload = action[1];
 				}
 
 				if ("cd".equals(inputType)) {
 					byte[] packetType = intToBytes(0);
 					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType,packetPayload);
+					byte[] finalPacket = concat(packetType, packetPayload);
 
 					writeBytes(finalPacket);
-				}
-				else if ("ls".equals(inputType)) {
+				} else if ("ls".equals(inputType)) {
 					byte[] packetType = intToBytes(1);
 					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType,packetPayload);
+					byte[] finalPacket = concat(packetType, packetPayload);
 
 					writeBytes(finalPacket);
-				}
-				else if ("mkdir".equals(inputType)) {
+				} else if ("mkdir".equals(inputType)) {
 					byte[] packetType = intToBytes(2);
 					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType,packetPayload);
+					byte[] finalPacket = concat(packetType, packetPayload);
 
 					writeBytes(finalPacket);
-				}
-				else if ("upload".equals(inputType)) {
+				} else if ("upload".equals(inputType)) {
 					byte[] packetType = intToBytes(3);
-					byte[] packetPayload = inputPayload.getBytes(); // TODO: GET FILE FROM PATH
-					byte[] finalPacket = concat(packetType,packetPayload);
+					File fileToUpload = new File(inputPayload);
+					byte[] filePayload = Files.readAllBytes(fileToUpload.toPath());
+					byte[] fileLengthPayload = intToBytes(filePayload.length);
+					byte[] fileNamePayload = fileToUpload.getName().getBytes();
+					byte[] tempPacket = concat(packetType, fileLengthPayload);
+					byte[] finalPacket = concat(tempPacket, fileNamePayload);
 
 					writeBytes(finalPacket);
-					// TODO: SEND THE FILE PROPERLY
-				}
-				else if ("download".equals(inputType)) {
+					readBytes(in, MAX_BUFFER_SIZE);//read until server is ready to handle the file
+					writeBytes(filePayload);
+				} else if ("download".equals(inputType)) {
 					byte[] packetType = intToBytes(4);
 					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType,packetPayload);
+					byte[] finalPacket = concat(packetType, packetPayload);
 
 					writeBytes(finalPacket);
 					// TODO: DOWNLOAD THE FILE
-				}
-				else if ("exit".equals(inputType)) {
+				} else if ("exit".equals(inputType)) {
 					byte[] packetType = intToBytes(5);
 					byte[] packetPayload = inputPayload.getBytes();
-					byte[] finalPacket = concat(packetType,packetPayload);
+					byte[] finalPacket = concat(packetType, packetPayload);
 
 					writeBytes(finalPacket);
 
 					// Wait for response from server before closing
-					byte[] starterExit = readBytes(in);
+					byte[] starterExit = readBytes(in, MAX_BUFFER_SIZE);
 					System.out.println(new String(starterExit).trim());
 					break;
 				} else {
@@ -111,8 +110,8 @@ public class Client {
 		scanner.close();
 	}
 
-	private byte[] readBytes(InputStream in) throws IOException {
-		byte[] data = new byte[MAX_BUFFER_SIZE];
+	private byte[] readBytes(InputStream in, int bufferSize) throws IOException {
+		byte[] data = new byte[bufferSize];
 
 		in.read(data, 0, data.length);
 
@@ -123,7 +122,7 @@ public class Client {
 		out.write(data, 0, data.length);
 	}
 
-	public byte[] intToBytes( final int i ) {
+	public byte[] intToBytes(final int i) {
 		ByteBuffer bb = ByteBuffer.allocate(4);
 		bb.putInt(i);
 		return bb.array();
