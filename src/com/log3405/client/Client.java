@@ -20,7 +20,7 @@ public class Client {
 		this.out = new DataOutputStream(socket.getOutputStream());
 		this.scanner = scanner;
 
-		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false);
 		System.out.println(BytesUtils.bytesToString(starter));
 	}
 
@@ -70,7 +70,7 @@ public class Client {
 
 						BytesUtils.writeBytes(out, finalPacket);
 						System.out.println("Server: " + BytesUtils
-								.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE)));//read until server is ready to handle the file
+								.bytesToString(BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false)));//read until server is ready to handle the file
 						BytesUtils.writeBytes(out, filePayload);
 						logResponse();
 						break;
@@ -79,15 +79,15 @@ public class Client {
 						byte[] requestPacket = processBasePacket(PacketTypeCode.DOWNLOAD.ordinal(), inputPayload);
 						BytesUtils.writeBytes(out, requestPacket);
 
-						byte[] response = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+						byte[] response = BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false);
 						int fileStatus = BytesUtils.bytesToInt(BytesUtils.extractSubByteArray(response, 0, 4));
 						if (fileStatus == 0) {
 							int downloadSize = BytesUtils.bytesToInt(BytesUtils.extractSubByteArray(response, 4, 8));
-							String fileName = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length - 1));
+							String fileName = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length));
 							String messageMidUpload = "Ready to read:" + downloadSize + " bytes";
 							BytesUtils.writeBytes(out, messageMidUpload.getBytes());
 
-							byte[] file = BytesUtils.readBytes(in, downloadSize);
+							byte[] file = BytesUtils.readBytes(in, downloadSize, true);
 							File newFile = new File(fileName);
 
 							try (FileOutputStream fos = new FileOutputStream(newFile.getPath())) {
@@ -100,7 +100,7 @@ public class Client {
 								System.out.println("Une erreur est arrivee lors du telechargement du fichier");
 							}
 						} else {
-							String errorMsg = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length - 1));
+							String errorMsg = BytesUtils.bytesToString(BytesUtils.extractSubByteArray(response, 8, response.length));
 							System.out.println(errorMsg);
 						}
 						break;
@@ -132,7 +132,7 @@ public class Client {
 	}
 
 	private void logResponse() throws IOException {
-		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE);
+		byte[] starter = BytesUtils.readBytes(in, MAX_BUFFER_SIZE, false);
 		System.out.println(BytesUtils.bytesToString(starter));
 	}
 
